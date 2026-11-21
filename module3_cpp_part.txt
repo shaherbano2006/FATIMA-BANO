@@ -1,0 +1,736 @@
+// ============================================================================
+//  MODULE 3 : heist.cpp PART  (Character, Victim, Detective, Suspect,
+//             BusinessRelations, HouseHelp, CloseRelations, Partner, PA,
+//             Cook, Guard, Servant, Child)
+//
+//  WHERE TO PASTE: inside heist.cpp, right AFTER the Module 4 Cottage code
+//  and BEFORE the Module 6 LeaderBoard code.
+//  This is a PART of heist.cpp, not a separate file. It needs heist.h, the
+//  helper functions (printLine, toUpperChar) and the TileRack code (Module 5)
+//  to work.
+// ============================================================================
+
+// ############################################################################
+//  MODULE 3 + MODULE 9 : CLASS Character  (abstract parent)
+// ############################################################################
+
+// [Module 3] Sets the details every person has. Nobody is the culprit yet.
+Character::Character(string name, string role, string nation)
+{
+    charactername = name;
+    characterrole = role;
+    nationality = nation;
+    isculprit = 0;
+    interviewed = 0;
+}
+
+// [Module 3 + 9] Virtual destructor: deleting a Character* also runs the
+// destructor of the real child (Cook, PA, ...).
+Character::~Character()
+{
+}
+
+// [Module 3] Prints the top part of a character card.
+void Character::showBasicInfo() const
+{
+    printLine('-');
+    cout << "  |  Name        : " << charactername << endl;
+    cout << "  |  Role        : " << characterrole << endl;
+    cout << "  |  Nationality : " << nationality << endl;
+}
+
+// [Module 3] Getter: name.
+string Character::getName() const
+{
+    return charactername;
+}
+
+// [Module 3] Getter: role (Cook, Guard, PA ...).
+string Character::getRole() const
+{
+    return characterrole;
+}
+
+// [Module 3] Getter: nationality.
+string Character::getNationality() const
+{
+    return nationality;
+}
+
+// [Module 3] Getter: 1 if this person is the culprit, otherwise 0.
+int Character::getIsCulprit() const
+{
+    return isculprit;
+}
+
+// [Module 3] Getter: 1 if already interviewed, otherwise 0.
+int Character::isInterviewed() const
+{
+    return interviewed;
+}
+
+// [Module 3] Setter: name.
+void Character::setName(string name)
+{
+    charactername = name;
+}
+
+// [Module 3] Setter: role.
+void Character::setRole(string role)
+{
+    characterrole = role;
+}
+
+// [Module 3] Setter: nationality.
+void Character::setNationality(string nation)
+{
+    nationality = nation;
+}
+
+// [Module 3] Setter: interviewed (1 or 0).
+void Character::setInterviewed(int value)
+{
+    interviewed = value;
+}
+
+// [Module 3 + 9] 1 if the detective's credibility is high enough to talk.
+// getRequiredCredibility() is virtual, so every role uses its own limit.
+int Character::canBeInterviewed(int credibility) const
+{
+    int needed = getRequiredCredibility();
+    int answer = 0;
+    if (credibility >= needed)
+    {
+        answer = 1;
+    }
+    return answer;
+}
+
+// [Module 11 - Operator Overloading + Friend] cout << person
+// Prints e.g.  Mr.Toby (Servant)
+ostream& operator<<(ostream& out, const Character& person)
+{
+    out << person.charactername << " (" << person.characterrole << ")";
+    return out;
+}
+
+// [Module 11 - Operator Overloading + Friend] cin >> person
+// Reads name, role and nationality (no spaces, use _).
+istream& operator>>(istream& in, Character& person)
+{
+    in >> person.charactername >> person.characterrole >> person.nationality;
+    return in;
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS Victim
+// ############################################################################
+
+// [Module 3] The business owner. He gives a letter for Word 2 but is not a suspect.
+Victim::Victim(string name, string role, string nation) : Character(name, role, nation)
+{
+    cluerowchar = Word2;
+    lettercluechar = '?';
+    boardposchar = 0;
+}
+
+// [Module 3] Destructor (nothing on the heap to delete).
+Victim::~Victim()
+{
+}
+
+// [Module 9] Victim's own display (overrides the pure virtual one).
+void Victim::display() const
+{
+    showBasicInfo();
+    cout << "  |  Status      : Victim (not a suspect)" << endl;
+    cout << "  |  Talks only  : if your credibility is " << getRequiredCredibility() << " or more" << endl;
+    printLine('-');
+}
+
+// [Module 3 + 5] Puts the victim's letter into a Clue and hands it over.
+Clue Victim::giveClue() const
+{
+    Clue clue(lettercluechar, boardposchar, cluerowchar);
+    return clue;
+}
+
+// [Module 3] Stores the victim's letter for this game.
+void Victim::setClue(char letter, int position)
+{
+    lettercluechar = toUpperChar(letter);
+    boardposchar = position;
+}
+
+// [Module 3] The owner talks only if credibility is 80 or more.
+int Victim::getRequiredCredibility() const
+{
+    return 80;
+}
+
+// [Module 3] The victim is NOT a suspect.
+int Victim::isSuspect() const
+{
+    return 0;
+}
+
+// [Module 9] What the victim says in an interview.
+string Victim::speak() const
+{
+    return "My locker... years of documents, gone! Please find who did this.";
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS Detective  (Composition with TileRack - Module 10)
+// ############################################################################
+
+// [Module 3] The player: 100 credibility, 0 turns, a 7-slot and an 8-slot rack.
+Detective::Detective() : Character("Detective", "Detective", "Malay"),
+                         rackone("Word 1 Rack", 7), racktwo("Word 2 Rack", 8)
+{
+    credibility = 100;
+    turns = 0;
+}
+
+// [Module 3] Copy constructor (deep copy of both racks).
+Detective::Detective(const Detective& other) : Character(other),
+                                               rackone(other.rackone), racktwo(other.racktwo)
+{
+    credibility = other.credibility;
+    turns = other.turns;
+}
+
+// [Module 3 + 11] Assignment operator (deep copy).
+Detective& Detective::operator=(const Detective& other)
+{
+    if (this != &other)
+    {
+        Character::operator=(other);        // copy the Character part first
+        credibility = other.credibility;
+        turns = other.turns;
+        rackone = other.rackone;
+        racktwo = other.racktwo;
+    }
+    return *this;
+}
+
+// [Module 3] Destructor (the racks clean themselves).
+Detective::~Detective()
+{
+}
+
+// [Module 2] Gets the detective ready for a new case.
+void Detective::resetForNewGame(string name, int startcredibility)
+{
+    charactername = name;
+    credibility = startcredibility;
+    turns = 0;
+    rackone.clear();
+    racktwo.clear();
+}
+
+// [Module 3] Getter: credibility.
+int Detective::getCredibility() const
+{
+    return credibility;
+}
+
+// [Module 3] Setter: credibility (never below 0).
+void Detective::setCredibility(int value)
+{
+    if (value < 0)
+    {
+        value = 0;
+    }
+    credibility = value;
+}
+
+// [Module 3] Cuts credibility after a mistake (stops at 0).
+void Detective::reduceCredibility(int amount)
+{
+    int newvalue = credibility - amount;
+    setCredibility(newvalue);
+}
+
+// [Module 3] Getter: turns used. (The GameEngine counts, the detective only stores.)
+int Detective::getTurns() const
+{
+    return turns;
+}
+
+// [Module 3] Setter: turns used (never below 0).
+void Detective::setTurns(int value)
+{
+    if (value < 0)
+    {
+        value = 0;
+    }
+    turns = value;
+}
+
+// [Module 3 + 5] Gives the REAL Word 1 rack (the & means "not a copy"),
+// so letters added to it stay inside the detective.
+TileRack& Detective::getRackOne()
+{
+    return rackone;
+}
+
+// [Module 3 + 5] Gives the REAL Word 2 rack.
+TileRack& Detective::getRackTwo()
+{
+    return racktwo;
+}
+
+// [Module 5] Prints both racks.
+void Detective::showRacks() const
+{
+    rackone.display();
+    racktwo.display();
+}
+
+// [Module 9] Detective's own display.
+void Detective::display() const
+{
+    showBasicInfo();
+    cout << "  |  Credibility : " << credibility << endl;
+    cout << "  |  Turns used  : " << turns << endl;
+    printLine('-');
+    showRacks();
+}
+
+// [Module 3 + 7] The detective collects clues, he never gives one.
+Clue Detective::giveClue() const
+{
+    throw InvalidInputException("The detective collects clues, he does not give them.");
+}
+
+// [Module 3] The detective has no letter, so this does nothing.
+void Detective::setClue(char letter, int position)
+{
+}
+
+// [Module 3] No credibility needed.
+int Detective::getRequiredCredibility() const
+{
+    return 0;
+}
+
+// [Module 3] The detective is not a suspect.
+int Detective::isSuspect() const
+{
+    return 0;
+}
+
+// [Module 9] The detective's own line.
+string Detective::speak() const
+{
+    return "I ask the questions around here.";
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS Suspect and its three groups
+//  (BusinessRelations, HouseHelp, CloseRelations)
+// ############################################################################
+
+// [Module 3] Abstract middle class of the 7 suspects.
+Suspect::Suspect(string name, string role, string nation) : Character(name, role, nation)
+{
+}
+
+// [Module 3] Destructor.
+Suspect::~Suspect()
+{
+}
+
+// [Module 3] Everyone below Suspect is a suspect.
+int Suspect::isSuspect() const
+{
+    return 1;
+}
+
+// [Module 3] Business group. Suspect is a VIRTUAL parent here (diamond fix).
+BusinessRelations::BusinessRelations(string name, string role, string nation) : Suspect(name, role, nation)
+{
+}
+
+// [Module 3] Destructor.
+BusinessRelations::~BusinessRelations()
+{
+}
+
+// [Module 3] Group name.
+string BusinessRelations::getRelation() const
+{
+    return "Business Relation";
+}
+
+// [Module 3] House help group (normal parent, not virtual).
+HouseHelp::HouseHelp(string name, string role, string nation) : Suspect(name, role, nation)
+{
+}
+
+// [Module 3] Destructor.
+HouseHelp::~HouseHelp()
+{
+}
+
+// [Module 3] Group name.
+string HouseHelp::getRelation() const
+{
+    return "House Help";
+}
+
+// [Module 3] Close relations group. Suspect is a VIRTUAL parent here (diamond fix).
+CloseRelations::CloseRelations(string name, string role, string nation) : Suspect(name, role, nation)
+{
+}
+
+// [Module 3] Destructor.
+CloseRelations::~CloseRelations()
+{
+}
+
+// [Module 3] Group name.
+string CloseRelations::getRelation() const
+{
+    return "Close Relation";
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS Partner   (Partner 1 and Partner 2)
+// ############################################################################
+
+// [Module 3] Because Suspect is a VIRTUAL parent, the last child (Partner)
+// must build Suspect itself, so Suspect(...) is written here too.
+Partner::Partner(string name, string role, string nation)
+    : Suspect(name, role, nation), BusinessRelations(name, role, nation)
+{
+    cluerowchar = Word2;
+    lettercluechar = '?';
+    boardposchar = 0;
+}
+
+// [Module 3] Destructor.
+Partner::~Partner()
+{
+}
+
+// [Module 9] Partner's own display.
+void Partner::display() const
+{
+    showBasicInfo();
+    cout << "  |  Group       : " << getRelation() << endl;
+    cout << "  |  Talks only  : if your credibility is " << getRequiredCredibility() << " or more" << endl;
+    printLine('-');
+}
+
+// [Module 3 + 5] Hands over the partner's letter as a Clue.
+Clue Partner::giveClue() const
+{
+    Clue clue(lettercluechar, boardposchar, cluerowchar);
+    return clue;
+}
+
+// [Module 3] Stores the partner's letter for this game.
+void Partner::setClue(char letter, int position)
+{
+    lettercluechar = toUpperChar(letter);
+    boardposchar = position;
+}
+
+// [Module 3] Partners talk only if credibility is 50 or more.
+int Partner::getRequiredCredibility() const
+{
+    return 50;
+}
+
+// [Module 9] What a partner says.
+string Partner::speak() const
+{
+    return "Our business was doing fine. Why would I risk all of that?";
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS PA   (the DIAMOND: BusinessRelations + CloseRelations)
+// ############################################################################
+
+// [Module 3] PA has two parents that both come from Suspect. Because of
+// virtual inheritance there is only ONE Suspect inside PA, and PA builds it.
+PA::PA(string name, string role, string nation)
+    : Suspect(name, role, nation),
+      BusinessRelations(name, role, nation),
+      CloseRelations(name, role, nation)
+{
+    cluerowchar = Word2;
+    lettercluechar = '?';
+    boardposchar = 0;
+}
+
+// [Module 3] Destructor.
+PA::~PA()
+{
+}
+
+// [Module 3] Both parents have getRelation(); PA writes the final one.
+string PA::getRelation() const
+{
+    return "Business + Close Relation";
+}
+
+// [Module 9] PA's own display.
+void PA::display() const
+{
+    showBasicInfo();
+    cout << "  |  Group       : " << getRelation() << endl;
+    cout << "  |  Note        : Right hand of the owner, knows his secrets" << endl;
+    cout << "  |  Talks only  : if your credibility is " << getRequiredCredibility() << " or more" << endl;
+    printLine('-');
+}
+
+// [Module 3 + 5] Hands over the PA's letter as a Clue.
+Clue PA::giveClue() const
+{
+    Clue clue(lettercluechar, boardposchar, cluerowchar);
+    return clue;
+}
+
+// [Module 3] Stores the PA's letter for this game.
+void PA::setClue(char letter, int position)
+{
+    lettercluechar = toUpperChar(letter);
+    boardposchar = position;
+}
+
+// [Module 3] PA talks if credibility is 35 or more.
+int PA::getRequiredCredibility() const
+{
+    return 35;
+}
+
+// [Module 9] What the PA says.
+string PA::speak() const
+{
+    return "I know every secret of this house. That is exactly why I called you.";
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS Cook   (House Help)
+// ############################################################################
+
+// [Module 3] HouseHelp is a normal parent, so we only call HouseHelp(...).
+Cook::Cook(string name, string role, string nation) : HouseHelp(name, role, nation)
+{
+    cluerowchar = Word2;
+    lettercluechar = '?';
+    boardposchar = 0;
+}
+
+// [Module 3] Destructor.
+Cook::~Cook()
+{
+}
+
+// [Module 9] Cook's own display.
+void Cook::display() const
+{
+    showBasicInfo();
+    cout << "  |  Group       : " << getRelation() << endl;
+    cout << "  |  Talks       : any time" << endl;
+    printLine('-');
+}
+
+// [Module 3 + 5] Hands over the cook's letter as a Clue.
+Clue Cook::giveClue() const
+{
+    Clue clue(lettercluechar, boardposchar, cluerowchar);
+    return clue;
+}
+
+// [Module 3] Stores the cook's letter for this game.
+void Cook::setClue(char letter, int position)
+{
+    lettercluechar = toUpperChar(letter);
+    boardposchar = position;
+}
+
+// [Module 3] House help talks any time (0 needed).
+int Cook::getRequiredCredibility() const
+{
+    return 0;
+}
+
+// [Module 9] What the cook says.
+string Cook::speak() const
+{
+    return "I was stirring the pasta all night, the kitchen never rests at a party!";
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS Guard   (House Help)
+// ############################################################################
+
+// [Module 3] Guard constructor.
+Guard::Guard(string name, string role, string nation) : HouseHelp(name, role, nation)
+{
+    cluerowchar = Word2;
+    lettercluechar = '?';
+    boardposchar = 0;
+}
+
+// [Module 3] Destructor.
+Guard::~Guard()
+{
+}
+
+// [Module 9] Guard's own display.
+void Guard::display() const
+{
+    showBasicInfo();
+    cout << "  |  Group       : " << getRelation() << endl;
+    cout << "  |  Talks       : any time" << endl;
+    printLine('-');
+}
+
+// [Module 3 + 5] Hands over the guard's letter as a Clue.
+Clue Guard::giveClue() const
+{
+    Clue clue(lettercluechar, boardposchar, cluerowchar);
+    return clue;
+}
+
+// [Module 3] Stores the guard's letter for this game.
+void Guard::setClue(char letter, int position)
+{
+    lettercluechar = toUpperChar(letter);
+    boardposchar = position;
+}
+
+// [Module 3] House help talks any time.
+int Guard::getRequiredCredibility() const
+{
+    return 0;
+}
+
+// [Module 9] What the guard says.
+string Guard::speak() const
+{
+    return "Nobody crossed the gate without me seeing them. Well... almost nobody.";
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS Servant   (House Help)
+// ############################################################################
+
+// [Module 3] Servant constructor.
+Servant::Servant(string name, string role, string nation) : HouseHelp(name, role, nation)
+{
+    cluerowchar = Word2;
+    lettercluechar = '?';
+    boardposchar = 0;
+}
+
+// [Module 3] Destructor.
+Servant::~Servant()
+{
+}
+
+// [Module 9] Servant's own display.
+void Servant::display() const
+{
+    showBasicInfo();
+    cout << "  |  Group       : " << getRelation() << endl;
+    cout << "  |  Talks       : any time" << endl;
+    printLine('-');
+}
+
+// [Module 3 + 5] Hands over the servant's letter as a Clue.
+Clue Servant::giveClue() const
+{
+    Clue clue(lettercluechar, boardposchar, cluerowchar);
+    return clue;
+}
+
+// [Module 3] Stores the servant's letter for this game.
+void Servant::setClue(char letter, int position)
+{
+    lettercluechar = toUpperChar(letter);
+    boardposchar = position;
+}
+
+// [Module 3] House help talks any time.
+int Servant::getRequiredCredibility() const
+{
+    return 0;
+}
+
+// [Module 9] What the servant says.
+string Servant::speak() const
+{
+    return "I only cleaned the rooms upstairs, sir. I never touch anything valuable.";
+}
+
+
+// ############################################################################
+//  MODULE 3 : CLASS Child   (Close Relation)
+// ############################################################################
+
+// [Module 3] CloseRelations has Suspect as a VIRTUAL parent, so Child
+// builds Suspect itself too.
+Child::Child(string name, string role, string nation)
+    : Suspect(name, role, nation), CloseRelations(name, role, nation)
+{
+    cluerowchar = Word2;
+    lettercluechar = '?';
+    boardposchar = 0;
+}
+
+// [Module 3] Destructor.
+Child::~Child()
+{
+}
+
+// [Module 9] Child's own display.
+void Child::display() const
+{
+    showBasicInfo();
+    cout << "  |  Group       : " << getRelation() << endl;
+    cout << "  |  Note        : Teenager (15-19), very panicked" << endl;
+    cout << "  |  Talks only  : if your credibility is " << getRequiredCredibility() << " or more" << endl;
+    printLine('-');
+}
+
+// [Module 3 + 5] Hands over the child's letter as a Clue.
+Clue Child::giveClue() const
+{
+    Clue clue(lettercluechar, boardposchar, cluerowchar);
+    return clue;
+}
+
+// [Module 3] Stores the child's letter for this game.
+void Child::setClue(char letter, int position)
+{
+    lettercluechar = toUpperChar(letter);
+    boardposchar = position;
+}
+
+// [Module 3] The child talks only if credibility is 75 or more.
+int Child::getRequiredCredibility() const
+{
+    return 75;
+}
+
+// [Module 9] What the child says.
+string Child::speak() const
+{
+    return "W-why me? I was in my room with my headphones on the whole time!";
+}
+
+
